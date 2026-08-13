@@ -1,0 +1,74 @@
+name: publish-snapshot
+# Independent public status snapshot (task 410592d9, STATUS-PAGE-SAME-FATE-INDEPENDENT-SNAPSHOT-01,
+# truth contract TC-24). This repo is the ONE status surface that survives a total
+# Supabase+Vercel outage: a GitHub-domain cron fetches the PUBLIC sanitized payload and
+# publishes it with an expiry watermark. ZERO secrets by design — the origin is public.
+# History stays depth-1 (amend+force): this is a machine-owned artifact repo, and the
+# commit doubles as repo activity so the schedule is never auto-disabled for inactivity.
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # GitHub cron can lag 3-15 min under load; expires_at budgets for it
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency:
+  group: publish-snapshot
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (pinned per CI-IMMUTABLE-REFERENCE-PIN-01)
+        with:
+          fetch-depth: 1
+      - name: fetch origin payload, wrap, publish
+        run: |
+          set -uo pipefail   # NOT -e: a failed origin fetch must still publish the honest failure record
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          CODE=$(curl -sS -o /tmp/payload.json -w '%{http_code}' --max-time 20 \
+                 'https://ops.shockwavehq.com/api/status' || echo 000)
+          [[ "$CODE" =~ ^[0-9]{3}$ ]] || CODE=0
+          VALID=false
+          if [ "$CODE" = "200" ] && jq -e '._kind == "public-v1"' /tmp/payload.json >/dev/null 2>&1; then
+            VALID=true
+          fi
+          if [ "$VALID" = "true" ]; then
+            # fresh snapshot: new watermarks, verbatim payload
+            jq -n --arg pub "$NOW" \
+                  --arg exp "$(date -u -d "+45 minutes" +%Y-%m-%dT%H:%M:%SZ)" \
+                  --arg code "$CODE" \
+                  --slurpfile p /tmp/payload.json '
+              { _snapshot_kind: "independent-fallback-v1",
+                published_at: $pub,
+                expires_at: $exp,
+                origin_fetch: { ok: true, http_code: ($code|tonumber), fetched_at: $pub },
+                payload: $p[0] }' > snapshot.json.new
+          else
+            # origin dark or invalid: PRESERVE the last good payload + its ORIGINAL watermarks
+            # (never re-stamped — expiry keeps its honesty); only the fetch record updates.
+            if [ -f snapshot.json ] && jq -e '.payload._kind == "public-v1"' snapshot.json >/dev/null 2>&1; then
+              jq --arg now "$NOW" --arg code "$CODE" '
+                .origin_fetch = { ok: false, http_code: ($code|tonumber), fetched_at: $now }' \
+                snapshot.json > snapshot.json.new
+            else
+              # nothing to preserve: publish an explicit no-observation record
+              jq -n --arg now "$NOW" --arg code "$CODE" '
+                { _snapshot_kind: "independent-fallback-v1",
+                  published_at: null, expires_at: null,
+                  origin_fetch: { ok: false, http_code: ($code|tonumber), fetched_at: $now },
+                  payload: null }' > snapshot.json.new
+            fi
+          fi
+          mv snapshot.json.new snapshot.json
+          git config user.name "status-snapshot-bot"
+          git config user.email "noreply@shockwavehq.com"
+          git add snapshot.json
+          # depth-1 history: amend if a prior commit exists, else initial commit
+          if git rev-parse HEAD >/dev/null 2>&1 && [ "$(git rev-list --count HEAD)" -ge 1 ]; then
+            git commit --amend -m "snapshot $NOW (origin http=$CODE valid=$VALID)" || exit 0
+            git push --force-with-lease origin HEAD:main || git push --force origin HEAD:main
+          else
+            git commit -m "snapshot $NOW (origin http=$CODE valid=$VALID)"
+            git push origin HEAD:main
+          fi

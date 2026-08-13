@@ -1,0 +1,169 @@
+{
+  "_snapshot_kind": "independent-fallback-v1",
+  "published_at": "2026-08-13T02:35:02Z",
+  "expires_at": "2026-08-13T03:20:02Z",
+  "origin_fetch": {
+    "ok": true,
+    "http_code": 200,
+    "fetched_at": "2026-08-13T02:35:02Z"
+  },
+  "payload": {
+    "_kind": "public-v1",
+    "metrics": {
+      "scope": "covered-services",
+      "window": "90d",
+      "sla_met": false,
+      "sla_state": "measured",
+      "avg_uptime": 98.15,
+      "sla_target": 99.9,
+      "avg_response_ms": 330.4,
+      "covered_services": 6,
+      "eligible_services": 6,
+      "suppressed_services": 0,
+      "total_downtime_minutes": 9479
+    },
+    "overall": "operational",
+    "services": [
+      {
+        "name": "AI Conversation Engine",
+        "status": "UP",
+        "severity": null,
+        "last_check": "2026-08-13T02:33:01.613801+00:00",
+        "response_ms": 27
+      },
+      {
+        "name": "Calendar & Booking",
+        "status": "UP",
+        "severity": null,
+        "last_check": "2026-08-13T02:33:01.613801+00:00",
+        "response_ms": 193
+      },
+      {
+        "name": "Data Pipeline",
+        "status": "UP",
+        "severity": null,
+        "last_check": "2026-08-13T02:33:01.613801+00:00",
+        "response_ms": 200
+      },
+      {
+        "name": "SMS & Voice Delivery",
+        "status": "UP",
+        "severity": null,
+        "last_check": "2026-08-13T02:33:01.613801+00:00",
+        "response_ms": 184
+      },
+      {
+        "name": "Webhook Gateway",
+        "status": "UP",
+        "severity": null,
+        "last_check": "2026-08-13T02:33:01.613801+00:00",
+        "response_ms": 115
+      },
+      {
+        "name": "Website",
+        "status": "UP",
+        "severity": null,
+        "last_check": "2026-08-13T02:33:01.613801+00:00",
+        "response_ms": 450
+      }
+    ],
+    "_served_at": "2026-08-13T02:34:00.587908+00:00",
+    "uptime_30d": [
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured.",
+        "uptime_pct": 99.79,
+        "coverage_pct": 99.7,
+        "service_name": "AI Conversation Engine",
+        "avg_response_ms": 53.5
+      },
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured.",
+        "uptime_pct": 99.65,
+        "coverage_pct": 99.7,
+        "service_name": "Calendar & Booking",
+        "avg_response_ms": 231.8
+      },
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured. | Availability data partially unavailable Jul 20 – Aug 10, 2026: a monitoring authentication fault left service state unmeasured; affected observations are excluded from uptime.",
+        "coverage": "insufficient-measurement-coverage",
+        "coverage_pct": 29.5,
+        "service_name": "Data Pipeline"
+      },
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured.",
+        "uptime_pct": 99.19,
+        "coverage_pct": 99.7,
+        "service_name": "SMS & Voice Delivery",
+        "avg_response_ms": 295.6
+      },
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured.",
+        "uptime_pct": 99.92,
+        "coverage_pct": 99.7,
+        "service_name": "Webhook Gateway",
+        "avg_response_ms": 106.7
+      },
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured.",
+        "uptime_pct": 99.81,
+        "coverage_pct": 99.7,
+        "service_name": "Website",
+        "avg_response_ms": 310
+      }
+    ],
+    "uptime_90d": [
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured.",
+        "uptime_pct": 99.44,
+        "coverage_pct": 97.3,
+        "service_name": "AI Conversation Engine",
+        "avg_response_ms": 96.5
+      },
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured.",
+        "uptime_pct": 99.68,
+        "coverage_pct": 97.3,
+        "service_name": "Calendar & Booking",
+        "avg_response_ms": 225.6
+      },
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured. | Availability data partially unavailable Jul 20 – Aug 10, 2026: a monitoring authentication fault left service state unmeasured; affected observations are excluded from uptime.",
+        "uptime_pct": 99.8,
+        "coverage_pct": 73.9,
+        "service_name": "Data Pipeline",
+        "avg_response_ms": 154.4
+      },
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured.",
+        "uptime_pct": 90.78,
+        "coverage_pct": 97.3,
+        "service_name": "SMS & Voice Delivery",
+        "avg_response_ms": 1094.6
+      },
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured.",
+        "uptime_pct": 99.78,
+        "coverage_pct": 97.3,
+        "service_name": "Webhook Gateway",
+        "avg_response_ms": 91.4
+      },
+      {
+        "note": "A monitoring-collector fault was briefly recorded as downtime; the affected minute is reclassified as unmeasured. | A monitoring-collector fault was briefly recorded as downtime; the affected minutes are reclassified as unmeasured.",
+        "uptime_pct": 99.79,
+        "coverage_pct": 97.3,
+        "service_name": "Website",
+        "avg_response_ms": 320
+      }
+    ],
+    "_snapshot_at": "2026-08-13T02:33:01.613801+00:00",
+    "last_checked": "2026-08-13T02:33:01.613801+00:00",
+    "recent_alerts": [],
+    "recent_resolved": [],
+    "active_incidents": [],
+    "monitoring_stale": false,
+    "coverage_floor_pct": 50,
+    "uptime_methodology": "duration-weighted-v2: each observation attests up to gap-cap seconds; unattested time is excluded from both numerator and denominator; per-service coverage below the policy floor withholds the number instead of fabricating one",
+    "computation_version": 2,
+    "public_stale_after_min": 10
+  }
+}

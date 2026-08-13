@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ShockwaveHQ — Independent Status Snapshot</title>
+<style>
+  /* Verdict-free by design (TC-24): this page states last-observed facts and their age.
+     It never asserts an overall green/red — that is the live page's job. */
+  :root { --red:#D12E1F; --ink:#000; --paper:#fff; --muted:#6b6b6b; --line:#e6e6e6; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         color:var(--ink); background:var(--paper); padding:2rem 1rem; }
+  .wrap { max-width:680px; margin:0 auto; }
+  h1 { font-size:1.15rem; letter-spacing:-.01em; margin-bottom:.25rem; }
+  .sub { color:var(--muted); font-size:.85rem; margin-bottom:1.25rem; }
+  .banner { border:1px solid var(--line); border-left:4px solid var(--red);
+            padding:.8rem 1rem; margin-bottom:1.25rem; font-size:.9rem; border-radius:4px; }
+  .banner strong { display:block; margin-bottom:.15rem; }
+  .banner.expired { border-left-color:#000; }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  th { text-align:left; font-weight:600; color:var(--muted); font-size:.78rem;
+       text-transform:uppercase; letter-spacing:.05em; padding:.45rem .5rem;
+       border-bottom:1px solid var(--line); }
+  td { padding:.55rem .5rem; border-bottom:1px solid var(--line); }
+  .state { font-variant-numeric:tabular-nums; }
+  .age { color:var(--muted); font-size:.82rem; white-space:nowrap; }
+  .foot { margin-top:1.5rem; color:var(--muted); font-size:.78rem; }
+  .foot a { color:inherit; }
+  #empty { color:var(--muted); padding:1rem 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ShockwaveHQ — Independent Status Snapshot</h1>
+  <div class="sub">A fallback record published from an independent system. The live status page is
+    <a href="https://ops.shockwavehq.com/api/status">ops.shockwavehq.com</a>.</div>
+  <div id="banner" class="banner"><strong>Loading snapshot…</strong></div>
+  <div id="content"></div>
+  <div class="foot">This snapshot states the last observations and their age — it makes no claim
+    about right now. Published by an automated process in a separate failure domain
+    (<a href="https://github.com/Shockwavehq/status-snapshot">source</a>).</div>
+</div>
+<script>
+(function () {
+  'use strict';
+  function esc(s) { var d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
+  function isoMs(s) { var t = Date.parse(s); return isNaN(t) ? null : t; }
+  function ageText(ms) {
+    if (ms == null) return 'unknown age';
+    var m = Math.round((Date.now() - ms) / 60000);
+    if (m < 1) return 'under a minute ago';
+    if (m < 60) return m + ' min ago';
+    var h = Math.floor(m / 60);
+    return h + ' h ' + (m % 60) + ' min ago';
+  }
+  function render(snap) {
+    var banner = document.getElementById('banner');
+    var content = document.getElementById('content');
+    var pubMs = snap && snap.published_at ? isoMs(snap.published_at) : null;
+    var expMs = snap && snap.expires_at ? isoMs(snap.expires_at) : null;
+    var fetchedOk = !!(snap && snap.origin_fetch && snap.origin_fetch.ok);
+    var payload = snap ? snap.payload : null;
+
+    if (!payload || pubMs == null) {
+      banner.className = 'banner expired';
+      banner.innerHTML = '<strong>No usable snapshot.</strong>The publisher has no verified observation to show'
+        + (snap && snap.origin_fetch ? ' (last publish attempt ' + esc(ageText(isoMs(snap.origin_fetch.fetched_at))) + ', origin HTTP ' + esc(snap.origin_fetch.http_code) + ')' : '') + '.';
+      content.innerHTML = '';
+      return;
+    }
+    // Expiry is enforced HERE, by wall clock — an expired snapshot is never rendered as usable.
+    var expired = (expMs == null) || (Date.now() > expMs);
+    if (expired) {
+      banner.className = 'banner expired';
+      banner.innerHTML = '<strong>Snapshot expired.</strong>The last verified observation is from '
+        + esc(ageText(pubMs)) + ' and is past its validity window. Treat current status as unknown.';
+      content.innerHTML = '';
+      return;
+    }
+    banner.className = 'banner';
+    banner.innerHTML = '<strong>Snapshot as of ' + esc(ageText(pubMs)) + '.</strong>'
+      + (fetchedOk
+          ? 'This is a periodically published copy of the public status feed — not a live reading.'
+          : 'The live status origin was UNREACHABLE at the last publish attempt ('
+            + esc(ageText(isoMs(snap.origin_fetch.fetched_at))) + '). Facts below are the last verified observation.');
+    var services = (payload && Array.isArray(payload.services)) ? payload.services : [];
+    if (!services.length) { content.innerHTML = '<div id="empty">The snapshot carries no per-service observations.</div>'; return; }
+    var rows = services.map(function (s) {
+      var lc = isoMs(s.last_check);
+      return '<tr><td>' + esc(s.name) + '</td><td class="state">' + esc(s.status || 'unknown')
+        + '</td><td class="age">' + esc(ageText(lc)) + '</td></tr>';
+    }).join('');
+    content.innerHTML = '<table><thead><tr><th>Service</th><th>Last observed state</th><th>Observed</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+  fetch('snapshot.json', { cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(render)
+    .catch(function () {
+      var b = document.getElementById('banner');
+      b.className = 'banner expired';
+      b.innerHTML = '<strong>Snapshot unavailable.</strong>Could not load the fallback record itself.';
+    });
+})();
+</script>
+</body>
+</html>

@@ -46,8 +46,21 @@ jobs:
           VALID=false
           # Contract validation beyond _kind (Sol D1): shape + observation timestamp present
           if [ "$CODE" = "200" ] \
-             && jq -e '._kind == "public-v1" and (.services|type) == "array" and (._snapshot_at != null)' /tmp/payload.json >/dev/null 2>&1; then
-            VALID=true
+             && jq -e '._kind == "public-v1" and (.services|type) == "array" and (._snapshot_at|type) == "string"' /tmp/payload.json >/dev/null 2>&1; then
+            # H-1/H-2 (Kimi): the expiry anchor is derived from this ONE origin field — the
+            # component this system exists to distrust. It must parse (no silent re-anchor)
+            # and sit inside [now-30min, now+5min]; anything else is a contract failure that
+            # takes the preserve-prior path and pages via ::error.
+            SNAP_AT=$(jq -r '._snapshot_at' /tmp/payload.json)
+            SNAP_EPOCH=$(date -u -d "$SNAP_AT" +%s 2>/dev/null || echo "")
+            NOW_EPOCH=$(date -u +%s)
+            if [ -n "$SNAP_EPOCH" ] \
+               && [ "$SNAP_EPOCH" -ge $((NOW_EPOCH - 1800)) ] \
+               && [ "$SNAP_EPOCH" -le $((NOW_EPOCH + 300)) ]; then
+              VALID=true
+            else
+              echo "::error::_snapshot_at failed the anchor contract (raw='$SNAP_AT' epoch='$SNAP_EPOCH' now=$NOW_EPOCH) — refusing to publish a wrapper whose expiry cannot be honestly anchored"
+            fi
           fi
           # Secret-pattern refusal (Sol Q3): a payload that looks like it carries a credential
           # is never published — publish the failure record instead.
@@ -66,9 +79,9 @@ jobs:
                   recent_resolved: [ (.recent_resolved // [])[] | { service_name, severity, started_at, resolved_at, duration_minutes, summary } ],
                   metrics: (.metrics // {} | { window, scope, avg_uptime, avg_response_ms, sla_target, sla_met, sla_state }) }' \
               /tmp/payload.json > /tmp/projected.json
-            # observation-anchored expiry (Sol Q1): 60 min from the payload's OWN _snapshot_at
-            SNAP_AT=$(jq -r '._snapshot_at' /tmp/projected.json)
-            EXP=$(date -u -d "$SNAP_AT + 60 minutes" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "+60 minutes" +%Y-%m-%dT%H:%M:%SZ)
+            # observation-anchored expiry (Sol Q1): 60 min from the payload's OWN _snapshot_at,
+            # computed from the epoch already validated above — no re-parse, no fallback (Kimi H-1)
+            EXP=$(date -u -d "@$((SNAP_EPOCH + 3600))" +%Y-%m-%dT%H:%M:%SZ)
             jq -n --arg pub "$NOW" --arg exp "$EXP" --arg code "$CODE" --slurpfile p /tmp/projected.json '
               { _snapshot_kind: "independent-fallback-v1",
                 _published_at: $pub,
@@ -79,13 +92,15 @@ jobs:
             # origin dark/invalid: preserve the last good record from the AUTHORITATIVE branch
             # (git, not the cached raw URL) with its ORIGINAL watermarks; only the publisher
             # clock advances. Cold start with nothing to preserve -> explicit no-observation.
-            git fetch origin snapshot --depth 1 2>/dev/null || true
-            if git show origin/snapshot:snapshot.json > /tmp/prior.json 2>/dev/null \
+            git fetch origin '+refs/heads/snapshot:refs/remotes/origin/snapshot' --depth 1 || \
+              echo "::warning::could not fetch the prior snapshot branch — preservation may fall to the no-observation record"
+            if git show refs/remotes/origin/snapshot:snapshot.json > /tmp/prior.json 2>/dev/null \
                && jq -e '.payload._kind == "public-v1"' /tmp/prior.json >/dev/null 2>&1; then
               jq --arg now "$NOW" --arg code "$CODE" '
                 ._origin_fetch = { ok: false, http_code: ($code|tonumber), fetched_at: $now }' \
                 /tmp/prior.json > out/snapshot.json.new
             else
+              echo "::warning::no prior good snapshot to preserve — publishing the explicit no-observation record"
               jq -n --arg now "$NOW" --arg code "$CODE" '
                 { _snapshot_kind: "independent-fallback-v1",
                   _published_at: null, _expires_at: null,

@@ -51,6 +51,7 @@
   function ageText(ms) {
     if (ms == null) return 'unknown age';
     var m = Math.round((Date.now() - ms) / 60000);
+    if (m < -1) return 'timestamp in the future — treat as unknown';
     if (m < 1) return 'under a minute ago';
     if (m < 60) return m + ' min ago';
     var h = Math.floor(m / 60);
@@ -77,7 +78,7 @@
     if (expired) {
       banner.className = 'banner expired';
       banner.innerHTML = '<strong>Snapshot expired.</strong>The last verified observation is from '
-        + esc(ageText(pubMs)) + ' and is past its validity window. Treat current status as unknown.';
+        + esc(ageText(obsMs !== null ? obsMs : pubMs)) + ' and is past its validity window. Treat current status as unknown.';
       content.innerHTML = '';
       return;
     }

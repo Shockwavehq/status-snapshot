@@ -1,28 +1,42 @@
 name: publish-snapshot
 # Independent public status snapshot (task 410592d9, STATUS-PAGE-SAME-FATE-INDEPENDENT-SNAPSHOT-01,
-# truth contract TC-24). This repo is the ONE status surface that survives a total
-# Supabase+Vercel outage: a GitHub-domain cron fetches the PUBLIC sanitized payload and
-# publishes it with an expiry watermark. ZERO secrets by design — the origin is public.
-# History stays depth-1 (amend+force): this is a machine-owned artifact repo, and the
-# commit doubles as repo activity so the schedule is never auto-disabled for inactivity.
+# truth contract TC-24 — narrowed for v1 per Sol review: this is an independent DELIVERY
+# vantage, not an independent MEASUREMENT vantage). ZERO secrets by design: the origin is
+# public, the pushes are same-repo.
+#
+# Layout (Sol D2): main carries the workflow + viewer with NORMAL history; the machine-owned
+# snapshot.json is force-replaced on the orphan `snapshot` branch (raw machine endpoint) and
+# deployed to Pages as an artifact (human endpoint). Raw URL is the break-glass route and
+# must remain documented even if a branded domain is added later (Sol #13).
+#
+# Two clocks (Sol D3): _origin_fetch.fetched_at is the PUBLISHER-health clock;
+# payload._snapshot_at is the OBSERVATION clock. A failed origin fetch updates only the
+# publisher clock — the last good payload keeps its ORIGINAL watermarks, never re-stamped.
 on:
   schedule:
-    - cron: '*/10 * * * *'   # GitHub cron can lag 3-15 min under load; expires_at budgets for it
+    - cron: '3,13,23,33,43,53 * * * *'  # offset minutes dodge top-of-hour runner contention;
+                                        # GitHub may delay/drop scheduled runs — the 60-min
+                                        # expiry (Sol Q1) budgets one dropped tick + delay + caches
   workflow_dispatch: {}
 permissions:
   contents: write
+  pages: write
+  id-token: write
 concurrency:
   group: publish-snapshot
   cancel-in-progress: false
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (pinned per CI-IMMUTABLE-REFERENCE-PIN-01)
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (CI-IMMUTABLE-REFERENCE-PIN-01)
         with:
           fetch-depth: 1
-      - name: fetch origin payload, wrap, publish
+      - name: fetch origin, validate, project, wrap
         run: |
           set -uo pipefail   # NOT -e: a failed origin fetch must still publish the honest failure record
           NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -30,45 +44,85 @@ jobs:
                  'https://ops.shockwavehq.com/api/status' || echo 000)
           [[ "$CODE" =~ ^[0-9]{3}$ ]] || CODE=0
           VALID=false
-          if [ "$CODE" = "200" ] && jq -e '._kind == "public-v1"' /tmp/payload.json >/dev/null 2>&1; then
+          # Contract validation beyond _kind (Sol D1): shape + observation timestamp present
+          if [ "$CODE" = "200" ] \
+             && jq -e '._kind == "public-v1" and (.services|type) == "array" and (._snapshot_at != null)' /tmp/payload.json >/dev/null 2>&1; then
             VALID=true
           fi
+          # Secret-pattern refusal (Sol Q3): a payload that looks like it carries a credential
+          # is never published — publish the failure record instead.
+          if [ "$VALID" = "true" ] && grep -qE 'eyJ[A-Za-z0-9_-]{30,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN' /tmp/payload.json; then
+            echo "::warning::payload matched a credential-like pattern — refusing to publish it"
+            VALID=false
+          fi
+          mkdir -p out
           if [ "$VALID" = "true" ]; then
-            # fresh snapshot: new watermarks, verbatim payload
-            jq -n --arg pub "$NOW" \
-                  --arg exp "$(date -u -d "+45 minutes" +%Y-%m-%dT%H:%M:%SZ)" \
-                  --arg code "$CODE" \
-                  --slurpfile p /tmp/payload.json '
+            # STRICT PROJECTION (Sol Q3): only allowlisted fields leave the origin payload —
+            # a future additive API field is never republished by accident.
+            jq '{ _kind, _snapshot_at, _served_at, monitoring_stale, last_checked,
+                  public_stale_after_min, coverage_floor_pct,
+                  services: [ (.services // [])[] | { name, status, severity, response_ms, last_check } ],
+                  active_incidents: [ (.active_incidents // [])[] | { service_name, severity, started_at, summary } ],
+                  recent_resolved: [ (.recent_resolved // [])[] | { service_name, severity, started_at, resolved_at, duration_minutes, summary } ],
+                  metrics: (.metrics // {} | { window, scope, avg_uptime, avg_response_ms, sla_target, sla_met, sla_state }) }' \
+              /tmp/payload.json > /tmp/projected.json
+            # observation-anchored expiry (Sol Q1): 60 min from the payload's OWN _snapshot_at
+            SNAP_AT=$(jq -r '._snapshot_at' /tmp/projected.json)
+            EXP=$(date -u -d "$SNAP_AT + 60 minutes" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "+60 minutes" +%Y-%m-%dT%H:%M:%SZ)
+            jq -n --arg pub "$NOW" --arg exp "$EXP" --arg code "$CODE" --slurpfile p /tmp/projected.json '
               { _snapshot_kind: "independent-fallback-v1",
-                published_at: $pub,
-                expires_at: $exp,
-                origin_fetch: { ok: true, http_code: ($code|tonumber), fetched_at: $pub },
-                payload: $p[0] }' > snapshot.json.new
+                _published_at: $pub,
+                _expires_at: $exp,
+                _origin_fetch: { ok: true, http_code: ($code|tonumber), fetched_at: $pub },
+                payload: $p[0] }' > out/snapshot.json.new
           else
-            # origin dark or invalid: PRESERVE the last good payload + its ORIGINAL watermarks
-            # (never re-stamped — expiry keeps its honesty); only the fetch record updates.
-            if [ -f snapshot.json ] && jq -e '.payload._kind == "public-v1"' snapshot.json >/dev/null 2>&1; then
+            # origin dark/invalid: preserve the last good record from the AUTHORITATIVE branch
+            # (git, not the cached raw URL) with its ORIGINAL watermarks; only the publisher
+            # clock advances. Cold start with nothing to preserve -> explicit no-observation.
+            git fetch origin snapshot --depth 1 2>/dev/null || true
+            if git show origin/snapshot:snapshot.json > /tmp/prior.json 2>/dev/null \
+               && jq -e '.payload._kind == "public-v1"' /tmp/prior.json >/dev/null 2>&1; then
               jq --arg now "$NOW" --arg code "$CODE" '
-                .origin_fetch = { ok: false, http_code: ($code|tonumber), fetched_at: $now }' \
-                snapshot.json > snapshot.json.new
+                ._origin_fetch = { ok: false, http_code: ($code|tonumber), fetched_at: $now }' \
+                /tmp/prior.json > out/snapshot.json.new
             else
-              # nothing to preserve: publish an explicit no-observation record
               jq -n --arg now "$NOW" --arg code "$CODE" '
                 { _snapshot_kind: "independent-fallback-v1",
-                  published_at: null, expires_at: null,
-                  origin_fetch: { ok: false, http_code: ($code|tonumber), fetched_at: $now },
-                  payload: null }' > snapshot.json.new
+                  _published_at: null, _expires_at: null,
+                  _origin_fetch: { ok: false, http_code: ($code|tonumber), fetched_at: $now },
+                  payload: null }' > out/snapshot.json.new
             fi
           fi
-          mv snapshot.json.new snapshot.json
-          git config user.name "status-snapshot-bot"
-          git config user.email "noreply@shockwavehq.com"
-          git add snapshot.json
-          # depth-1 history: amend if a prior commit exists, else initial commit
-          if git rev-parse HEAD >/dev/null 2>&1 && [ "$(git rev-list --count HEAD)" -ge 1 ]; then
-            git commit --amend -m "snapshot $NOW (origin http=$CODE valid=$VALID)" || exit 0
-            git push --force-with-lease origin HEAD:main || git push --force origin HEAD:main
-          else
-            git commit -m "snapshot $NOW (origin http=$CODE valid=$VALID)"
-            git push origin HEAD:main
-          fi
+          mv out/snapshot.json.new out/snapshot.json   # atomic within the job (Sol Q4)
+          echo "published: valid=$VALID code=$CODE"
+      - name: force-replace the orphan snapshot branch (raw machine endpoint)
+        run: |
+          set -euo pipefail
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          W=$(mktemp -d)
+          git -C "$W" init -q -b snapshot
+          cp out/snapshot.json "$W/snapshot.json"
+          git -C "$W" -c user.name=status-snapshot-bot -c user.email=noreply@shockwavehq.com \
+            add snapshot.json
+          git -C "$W" -c user.name=status-snapshot-bot -c user.email=noreply@shockwavehq.com \
+            commit -q -m "snapshot $NOW"
+          git -C "$W" remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # single-commit orphan branch, replaced each run; main history is never rewritten (Sol D2)
+          git -C "$W" push --force origin snapshot:snapshot
+          # read-back verify (Sol Q4): the remote ref must equal what we just built
+          LOCAL=$(git -C "$W" rev-parse snapshot)
+          REMOTE=$(git ls-remote origin refs/heads/snapshot | cut -f1)
+          [ "$LOCAL" = "$REMOTE" ] || { echo "::error::read-back mismatch local=$LOCAL remote=$REMOTE"; exit 1; }
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: build + deploy the human page (Pages artifact)
+        run: |
+          mkdir -p site
+          cp index.html site/index.html
+          cp out/snapshot.json site/snapshot.json
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: site
+      - uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        id: deployment

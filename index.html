@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>ShockwaveHQ — Independent Status Snapshot</title>
 <style>
   /* Verdict-free by design (TC-24): this page states last-observed facts and their age.
@@ -58,15 +59,16 @@
   function render(snap) {
     var banner = document.getElementById('banner');
     var content = document.getElementById('content');
-    var pubMs = snap && snap.published_at ? isoMs(snap.published_at) : null;
-    var expMs = snap && snap.expires_at ? isoMs(snap.expires_at) : null;
-    var fetchedOk = !!(snap && snap.origin_fetch && snap.origin_fetch.ok);
+    var pubMs = snap && snap._published_at ? isoMs(snap._published_at) : null;
+    var expMs = snap && snap._expires_at ? isoMs(snap._expires_at) : null;
+    var fetchedOk = !!(snap && snap._origin_fetch && snap._origin_fetch.ok);
+    var obsMs = (snap && snap.payload && snap.payload._snapshot_at) ? isoMs(snap.payload._snapshot_at) : null;
     var payload = snap ? snap.payload : null;
 
     if (!payload || pubMs == null) {
       banner.className = 'banner expired';
       banner.innerHTML = '<strong>No usable snapshot.</strong>The publisher has no verified observation to show'
-        + (snap && snap.origin_fetch ? ' (last publish attempt ' + esc(ageText(isoMs(snap.origin_fetch.fetched_at))) + ', origin HTTP ' + esc(snap.origin_fetch.http_code) + ')' : '') + '.';
+        + (snap && snap._origin_fetch ? ' (last publish attempt ' + esc(ageText(isoMs(snap._origin_fetch.fetched_at))) + ', origin HTTP ' + esc(snap._origin_fetch.http_code) + ')' : '') + '.';
       content.innerHTML = '';
       return;
     }
@@ -80,11 +82,11 @@
       return;
     }
     banner.className = 'banner';
-    banner.innerHTML = '<strong>Snapshot as of ' + esc(ageText(pubMs)) + '.</strong>'
+    banner.innerHTML = '<strong>Last observation ' + esc(ageText(obsMs !== null ? obsMs : pubMs)) + '; published independently ' + esc(ageText(pubMs)) + '.</strong>'
       + (fetchedOk
           ? 'This is a periodically published copy of the public status feed — not a live reading.'
           : 'The live status origin was UNREACHABLE at the last publish attempt ('
-            + esc(ageText(isoMs(snap.origin_fetch.fetched_at))) + '). Facts below are the last verified observation.');
+            + esc(ageText(isoMs(snap._origin_fetch.fetched_at))) + '). Facts below are the last verified observation.');
     var services = (payload && Array.isArray(payload.services)) ? payload.services : [];
     if (!services.length) { content.innerHTML = '<div id="empty">The snapshot carries no per-service observations.</div>'; return; }
     var rows = services.map(function (s) {

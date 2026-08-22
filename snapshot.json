@@ -1,0 +1,74 @@
+{
+  "_snapshot_kind": "independent-fallback-v1",
+  "_published_at": "2026-08-22T18:54:11Z",
+  "_expires_at": "2026-08-22T19:53:00Z",
+  "_origin_fetch": {
+    "ok": true,
+    "http_code": 200,
+    "fetched_at": "2026-08-22T18:54:11Z"
+  },
+  "payload": {
+    "_kind": "public-v1",
+    "_snapshot_at": "2026-08-22T18:53:00.335209+00:00",
+    "_served_at": "2026-08-22T18:54:01.404651+00:00",
+    "monitoring_stale": false,
+    "last_checked": "2026-08-22T18:53:00.335209+00:00",
+    "public_stale_after_min": 10,
+    "coverage_floor_pct": 50,
+    "services": [
+      {
+        "name": "AI Conversation Engine",
+        "status": "UP",
+        "severity": null,
+        "response_ms": 100,
+        "last_check": "2026-08-22T18:53:00.3303+00:00"
+      },
+      {
+        "name": "Calendar & Booking",
+        "status": "UP",
+        "severity": null,
+        "response_ms": 289,
+        "last_check": "2026-08-22T18:53:00.282246+00:00"
+      },
+      {
+        "name": "Data Pipeline",
+        "status": "UP",
+        "severity": null,
+        "response_ms": 601,
+        "last_check": "2026-08-22T18:53:00.306818+00:00"
+      },
+      {
+        "name": "SMS & Voice Delivery",
+        "status": "UP",
+        "severity": null,
+        "response_ms": 166,
+        "last_check": "2026-08-22T18:53:00.314751+00:00"
+      },
+      {
+        "name": "Webhook Gateway",
+        "status": "UP",
+        "severity": null,
+        "response_ms": 298,
+        "last_check": "2026-08-22T18:53:00.335209+00:00"
+      },
+      {
+        "name": "Website",
+        "status": "UP",
+        "severity": null,
+        "response_ms": 443,
+        "last_check": "2026-08-22T18:53:00.32157+00:00"
+      }
+    ],
+    "active_incidents": [],
+    "recent_resolved": [],
+    "metrics": {
+      "window": "90d",
+      "scope": "covered-services",
+      "avg_uptime": 97.86,
+      "avg_response_ms": 341,
+      "sla_target": 99.9,
+      "sla_met": false,
+      "sla_state": "measured"
+    }
+  }
+}
